@@ -1,0 +1,16 @@
+1. Zadáním je příprava prostředí (viz bod 2), návrh, implementace a obhájeni řešení na schůzce
+technického kola pohovoru konzolní appky v jazyce Python verzi 3 (dale jenom appka).
+
+2. Postgres DB verzi 11.5 (dale jenom DB) obsahuje tabulku `item` se sloupečky `ID`
+(BIGINT PRIMARY KEY), `status` (VARCHAR NOT NULL), `updated_at`
+(TIMESTAMPTZ DEFAULT NULL). Po změně hodnoty sloupečku ´status´ u záznamu
+tabulky `item` DB trigeruje notifikaci (viz https://www.postgresql.org/docs/current/sqlnotify.html, dale jenom notifikace) na kanálu `item_change`.
+
+3. Po naběhnutí, appka přihlásí se k odběru notifikaci DB na kanálu `item_change`. Po dostání
+notifikaci začíná sekvenčně (seřazené podle ID vzestupně) zpracovávat záznamy tabulky
+´item´ DB. Zpracovaní záznamu probíhá následovně:
+
+◦ uloží záznam do textového log souboru ve formatu:
+<aktualni UTC cas ve formatu ISO 8601><mezera><JSON zaznamu><konec radku>
+◦ nastaví hodnotu sloupečku ´logged_at´ zaznamu v tabulce `item` Postgres DB na
+aktuální čas pomocí raw SQL.

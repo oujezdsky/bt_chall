@@ -1,0 +1,10 @@
+#psql (11.7 (Debian 11.7-0+deb10u1))
+su - postgres
+psql
+CREATE DATABASE dbname;
+CREATE USER username WITH PASSWORD 'userpassword';
+ALTER ROLE username SET client_encoding TO 'utf8';
+ALTER ROLE username SET default_transaction_isolation TO 'read committed';
+ALTER ROLE username SET timezone TO 'UTC';
+GRANT ALL PRIVILEGES ON DATABASE dbname TO username;
+ \q
