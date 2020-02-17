@@ -1,5 +1,5 @@
 ### description
-Create postgres, every time row value of specific column is updated send pg_notification. Run notification consumer, on every notification alter given row in database (update timestamp field with current date) and query all results in table, write every single result to a file ./output.log
+Create postgres table, every time row value of specific column is updated send pg_notification. Run notification consumer, on every notification alter given row in database (update timestamp field with current date) and query all results in table, write every single result to a file ./output.log
 
 requirements: 
  * Linux os (tested with debian 10)
