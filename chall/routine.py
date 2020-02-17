@@ -228,7 +228,7 @@ class AioConsumer(object):
         async with aiosa__create_engine(DSN) as engine:
             while 1:
                 tasks = []
-                for i in range(1):
+                for i in range(10):
                     task = asyncio.create_task(
                         self.notify_processor(q, engine))
                     tasks.append(task)
