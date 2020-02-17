@@ -1,5 +1,14 @@
 from sqlalchemy import create_engine, MetaData
-from chall.constants import DSN, DEBUG, ENCODING, TABLE_NAME, FD_TIMEOUT, CHANNEL_NAME
+from chall.constants import (
+    DSN,
+    DEBUG,
+    ENCODING,
+    TABLE_NAME,
+    FD_TIMEOUT,
+    TABLE_KEYS,
+    CHANNEL_NAME,
+    DSN_AIOPG,
+)
 import select
 import psycopg2
 from sqlalchemy import Table, Column, select, text as sql_text
@@ -14,12 +23,12 @@ import json
 import select
 import psycopg2
 import threading
-from threading import Lock
 from multiprocessing import Queue
 
 # asyncio
 import asyncio
 import aiopg
+from aiopg.sa import create_engine as aiosa__create_engine
 
 
 class ChanListener(object):
@@ -45,7 +54,8 @@ class ChanListener(object):
     def create_engine(self):
         # bind db engine
         try:
-            self.engine = create_engine(DSN, encoding=ENCODING, echo=DEBUG)
+            self.engine = create_engine(
+                DSN, encoding=ENCODING, echo=DEBUG, pool_size=20, max_overflow=0)
         except OperationalError as e:
             raise e
 
@@ -125,7 +135,6 @@ class ChanListener(object):
         except Exception as e:
             raise e
 
-
     def consume_select(self):
         def connect():
             self.conn = self.engine.connect()
@@ -146,7 +155,7 @@ class ChanListener(object):
                 f.close()
 
             def json_serial(obj):
-                """JSON serializer for objects not serializable by default json code"""
+                """JSON serializer for objects not serialTABLE_KEYSizable by default json code"""
 
                 if isinstance(obj, (datetime.datetime, datetime.date)):
                     return obj.isoformat()
@@ -163,12 +172,11 @@ class ChanListener(object):
                 )
                 self.engine.execute(query)
 
-        self.create_engine()
         connect()
         q = Queue()
-        l = Lock()
         conn = self.conn.connection.connection
-        conn.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+        conn.set_isolation_level(
+            psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
         rlist = [conn]
         curs = self.conn.connection.cursor()
         curs.execute(f"LISTEN {CHANNEL_NAME};")
@@ -185,3 +193,66 @@ class ChanListener(object):
                     t = threading.Thread(target=got_notify, args=(notify, q))
                     t.start()
 
+
+class AioConsumer(object):
+
+    async def notify_processor(self, q, engine):
+        async def _write(pld):
+            f = open("output.log", "a")
+            f.write(f"{datetime.datetime.now().isoformat()} {pld}\n")
+            f.close()
+
+        def json_serial(obj):
+            """JSON serializer for objects not serializable by default json code"""
+
+            if isinstance(obj, (datetime.datetime, datetime.date)):
+                return obj.isoformat()
+            raise TypeError(f"Type {type(obj)} not serializable")
+
+        while 1:
+            item = await q.get()
+            await _write(json.dumps(item, default=json_serial))
+            query = sql_text(
+                f"UPDATE {TABLE_NAME} SET logged_at=:curr_date WHERE id=:the_id"
+            )
+            query = query.bindparams(
+                the_id=item.get("id"), curr_date=datetime.datetime.now()
+            )
+            async with engine.acquire() as conn:
+
+                await conn.execute(query)
+
+            q.task_done()
+
+    async def runner(self, q):
+        async with aiosa__create_engine(DSN) as engine:
+            while 1:
+                tasks = []
+                for i in range(1):
+                    task = asyncio.create_task(
+                        self.notify_processor(q, engine))
+                    tasks.append(task)
+
+                await q.join()
+                for task in tasks:
+                    task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
+
+    async def listen(self, conn, q):
+
+        async with conn.cursor() as cur:
+            await cur.execute(f"LISTEN {CHANNEL_NAME}")
+            while True:
+                _ = await conn.notifies.get()
+                await cur.execute("SELECT * FROM item")
+                res = await cur.fetchall()
+                for r in res:
+                    q.put_nowait(dict(zip(TABLE_KEYS, r)))
+
+    async def main(self):
+        q = asyncio.Queue()
+        async with aiopg.create_pool(DSN_AIOPG) as pool:
+            async with pool.acquire() as conn1:
+                listener = self.listen(conn1, q)
+                runner = self.runner(q)
+                await asyncio.gather(listener, runner)

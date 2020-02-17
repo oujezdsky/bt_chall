@@ -13,8 +13,10 @@ class Emitter(object):
             return
 
     def run(self, affected_rows=10):
-        PLD_CREATE = tuple(dict(id=x, status="a" * x) for x in range(affected_rows))
-        PLD_UPDATE = tuple(dict(id=x, status="b" * x) for x in range(affected_rows))
+        PLD_CREATE = tuple(dict(id=x, status="a")
+                           for x in range(affected_rows))
+        PLD_UPDATE = tuple(dict(id=x, status="b")
+                           for x in range(affected_rows))
 
         def create_rows():
             self.chan_listener.engine.execute(
@@ -27,11 +29,11 @@ class Emitter(object):
                     self.chan_listener.meta.tables[TABLE_NAME]
                     .update()
                     .where(
-                        self.chan_listener.meta.tables[TABLE_NAME].c.id == pld.get("id")
+                        self.chan_listener.meta.tables[TABLE_NAME].c.id == pld.get(
+                            "id")
                     )
                     .values(dict(status=pld.get("status")))
                 )
 
         create_rows()
         update_rows()
-
