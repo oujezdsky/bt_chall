@@ -1,4 +1,7 @@
 ### description
+
+# in 24hours, create app which which meets following specs
+
 Create postgres table, every time row value of specific column is updated send pg_notification. Run notification consumer, on every notification alter given row in database (update timestamp field with current date) and query all results in table, write every single result to a file ./output.log
 
 requirements: 
